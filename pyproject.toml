@@ -7,7 +7,7 @@ name = "ultralytics-disk-cache-hook"
 dynamic = ["version"]
 description = "Redirect Ultralytics disk cache files into a local temporary cache root."
 readme = "README.md"
-license = "All rights reserved."
+license-files = ["LICENSE.txt"]
 requires-python = ">=3.10"
 authors = [
   { name = "xx025" },
@@ -36,9 +36,6 @@ Issues = "https://github.com/xx025/ultralytics-disk-cache-hook/issues"
 
 [tool.setuptools.dynamic]
 version = { attr = "ultralytics_disk_cache_hook.__version__" }
-
-[tool.setuptools]
-license-files = ["LICENSE.txt"]
 
 [tool.setuptools.packages.find]
 include = ["ultralytics_disk_cache_hook*"]
