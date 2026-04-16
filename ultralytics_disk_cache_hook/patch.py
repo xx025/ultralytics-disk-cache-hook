@@ -76,6 +76,10 @@ def enable() -> None:
     base_dataset_cls = base_module.BaseDataset
     classification_dataset_cls = dataset_module.ClassificationDataset
     if getattr(base_dataset_cls, "_ultralytics_disk_cache_hook_enabled", False):
+        print(
+            "[ultralytics-disk-cache-hook] already enabled, "
+            f"cache root: {get_plugin_cache_root()}"
+        )
         return
 
     original_base_init = base_dataset_cls.__init__
@@ -144,3 +148,9 @@ def enable() -> None:
     base_dataset_cls._ultralytics_disk_cache_hook_original_check_cache_disk = original_base_check_cache_disk
     classification_dataset_cls._ultralytics_disk_cache_hook_original_init = original_classification_init
     classification_dataset_cls._ultralytics_disk_cache_hook_original_getitem = original_classification_getitem
+
+    print(
+        "[ultralytics-disk-cache-hook] enabled, "
+        f"ultralytics={ultralytics.__version__}, "
+        f"cache root: {get_plugin_cache_root()}"
+    )
