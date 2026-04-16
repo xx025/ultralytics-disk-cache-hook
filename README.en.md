@@ -108,8 +108,51 @@ from ultralytics_disk_cache_hook import (
 )
 ```
 
+## Packaging and Publishing
+
+The repository now includes two GitHub Actions workflows:
+
+- `.github/workflows/build.yml`
+  Purpose: build `sdist` and `wheel` on `push`, `pull_request`, and manual runs, then run `twine check`
+- `.github/workflows/publish.yml`
+  Purpose: build and publish the package to PyPI after a GitHub Release is published
+
+### Build Locally
+
+```bash
+python -m pip install --upgrade build
+python -m build
+```
+
+Artifacts will be created in:
+
+```text
+dist/
+```
+
+### Publish to PyPI Automatically
+
+The current workflow uses PyPI Trusted Publishing, so you do not need to store a PyPI API token in GitHub Secrets.
+
+You need to configure a Trusted Publisher in the PyPI project settings with values like:
+
+- Owner: `xx025`
+- Repository name: `ultralytics-disk-cache-hook`
+- Workflow name: `publish.yml`
+- Environment name: `pypi`
+
+After that, the usual release flow is:
+
+1. Update `__version__` in `ultralytics_disk_cache_hook/__init__.py`
+2. Commit and push the changes
+3. Create a GitHub Release
+4. Let `publish.yml` build and publish the package to PyPI automatically
+
+If you only want to validate packaging first, run `build.yml` manually.
+
 ## References
 
 - Ultralytics releases: https://github.com/ultralytics/ultralytics/releases
 - Ultralytics tags: https://github.com/ultralytics/ultralytics/tags
 - `v8.4.38` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.38
+- PyPI Trusted Publishing: https://docs.pypi.org/trusted-publishers/

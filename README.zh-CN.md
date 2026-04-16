@@ -108,8 +108,51 @@ from ultralytics_disk_cache_hook import (
 )
 ```
 
+## 打包与发布
+
+仓库已经包含两套 GitHub Actions 工作流：
+
+- `.github/workflows/build.yml`
+  作用：在 `push`、`pull_request` 和手动触发时自动构建 `sdist` 和 `wheel`，并执行 `twine check`
+- `.github/workflows/publish.yml`
+  作用：在 GitHub Release 发布后自动构建并发布到 PyPI
+
+### 本地构建
+
+```bash
+python -m pip install --upgrade build
+python -m build
+```
+
+构建产物会出现在：
+
+```text
+dist/
+```
+
+### 自动发布到 PyPI
+
+当前工作流使用的是 PyPI Trusted Publishing 方式，不需要把 PyPI API Token 直接存进 GitHub Secrets。
+
+你需要先在 PyPI 项目后台配置 Trusted Publisher，大致信息如下：
+
+- Owner: `xx025`
+- Repository name: `ultralytics-disk-cache-hook`
+- Workflow name: `publish.yml`
+- Environment name: `pypi`
+
+配置完成后，发布流程通常是：
+
+1. 更新 `ultralytics_disk_cache_hook/__init__.py` 中的 `__version__`
+2. 提交并推送代码
+3. 在 GitHub 上创建一个 Release
+4. `publish.yml` 自动构建并发布到 PyPI
+
+如果你只想先验证构建是否正常，可以手动运行 `build.yml`。
+
 ## 参考链接
 
 - Ultralytics releases: https://github.com/ultralytics/ultralytics/releases
 - Ultralytics tags: https://github.com/ultralytics/ultralytics/tags
 - `v8.4.38` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.38
+- PyPI Trusted Publishing: https://docs.pypi.org/trusted-publishers/

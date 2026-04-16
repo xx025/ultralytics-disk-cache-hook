@@ -8,3 +8,8 @@ Redirect `ultralytics` `cache="disk"` image caches away from the dataset directo
 
 - [中文说明](./README.zh-CN.md)
 - [English Documentation](./README.en.md)
+
+## CI/CD
+
+- GitHub Actions build workflow: `.github/workflows/build.yml`
+- GitHub Actions publish workflow: `.github/workflows/publish.yml`

@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ultralytics-disk-cache-hook"
+dynamic = ["version"]
+description = "Redirect Ultralytics disk cache files into a local temporary cache root."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "xx025" },
+]
+keywords = ["ultralytics", "yolo", "cache", "nfs", "training"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+  "packaging>=24.0",
+  "ultralytics>=8.4.0,<=8.4.38",
+]
+
+[project.urls]
+Homepage = "https://github.com/xx025/ultralytics-disk-cache-hook"
+Repository = "https://github.com/xx025/ultralytics-disk-cache-hook"
+Issues = "https://github.com/xx025/ultralytics-disk-cache-hook/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "ultralytics_disk_cache_hook.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["ultralytics_disk_cache_hook*"]

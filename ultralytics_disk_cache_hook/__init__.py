@@ -1,3 +1,5 @@
+__version__ = "0.1.0"
+
 from .io import (
     PLUGIN_CACHE_DIRNAME,
     PLUGIN_TMP_ENV,
@@ -14,6 +16,7 @@ from .patch import (
 )
 
 __all__ = [
+    "__version__",
     "MAX_ULTRALYTICS_VERSION",
     "MIN_ULTRALYTICS_VERSION",
     "PLUGIN_CACHE_DIRNAME",
