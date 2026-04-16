@@ -1,0 +1,4 @@
+Copyright (c) xx025. All rights reserved.
+
+No license is granted to use, copy, modify, distribute, sublicense, or sell
+this software without prior written permission from the copyright holder.

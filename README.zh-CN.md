@@ -1,4 +1,8 @@
+
+
 # ultralytics-disk-cache-hook
+
+[English README](./README.md)
 
 `ultralytics` 在 `cache="disk"` 时，默认会把图片缓存成 `*.npy` 并直接写回图片所在目录。
 
@@ -8,7 +12,21 @@
 - 容易放大元数据压力
 - 训练节点的本地磁盘无法被优先利用
 
-这个插件通过 monkey patch `ultralytics` 的内部数据集实现，把 `disk cache` 重定向到本地临时目录。
+这个插件通过 monkey patch `ultralytics` 的内部数据集实现，把 `disk cache` 重定向到训练节点上的本地缓存目录。
+
+
+
+## 快速开始
+
+```python
+from ultralytics_disk_cache_hook import enable
+from ultralytics import YOLO
+
+enable()
+
+model = YOLO("yolov8n.pt")
+model.train(data="coco128.yaml", cache="disk")
+```
 
 ## 行为说明
 
@@ -18,11 +36,9 @@
 - 分类任务会重写 `ClassificationDataset.samples` 中的 `*.npy` 路径
 - 缓存路径不会按原始目录展开，而是写入哈希桶目录
 
-默认缓存根目录：
+## 缓存根目录
 
-```text
-/tmp/ultralytics-disk-cache
-```
+缓存根目录优先取 `ULTRALYTICS_DISK_CACHE_TMPDIR`，否则使用 `tempfile.gettempdir()`，然后在其下追加 `ultralytics-disk-cache`。
 
 可通过环境变量覆盖：
 
@@ -34,21 +50,7 @@ export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 
 ```text
 /mnt/nfs/datasets/coco/images/train2017/000000000001.jpg
--> /tmp/ultralytics-disk-cache/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
-```
-
-## 使用方法
-
-在训练前先启用插件：
-
-```python
-from ultralytics_disk_cache_hook import enable
-from ultralytics import YOLO
-
-enable()
-
-model = YOLO("yolov8n.pt")
-model.train(data="coco128.yaml", cache="disk")
+-> <cache-root>/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
 ```
 
 ## 版本支持
@@ -71,18 +73,10 @@ model.train(data="coco128.yaml", cache="disk")
 
 这份范围是基于 GitHub 上已检查的源码和 release/tag 结果确定的；截至 `2026-04-17`，我核对到的最新 release 是 `v8.4.38`。
 
-## 如何查看当前版本
-
 查看当前环境中的 `ultralytics` 版本：
 
 ```bash
 python -c "import ultralytics; print(ultralytics.__version__)"
-```
-
-或者：
-
-```bash
-pip show ultralytics
 ```
 
 ## 磁盘空间说明
@@ -93,66 +87,12 @@ pip show ultralytics
 
 如果本地缓存盘被写满，报错会发生在实际写入 `*.npy` 文件时。
 
-## 对外 API
-
-```python
-from ultralytics_disk_cache_hook import (
-    MAX_ULTRALYTICS_VERSION,
-    MIN_ULTRALYTICS_VERSION,
-    UnsupportedUltralyticsVersionError,
-    enable,
-    get_cache_path_for_image,
-    get_plugin_cache_root,
-    get_plugin_tmp_root,
-    is_enabled,
-)
-```
-
-## 打包与发布
-
-仓库已经包含两套 GitHub Actions 工作流：
-
-- `.github/workflows/build.yml`
-  作用：在 `push`、`pull_request` 和手动触发时自动构建 `sdist` 和 `wheel`，并执行 `twine check`
-- `.github/workflows/publish.yml`
-  作用：在 GitHub Release 发布后自动构建并发布到 PyPI
-
-### 本地构建
-
-```bash
-python -m pip install --upgrade build
-python -m build
-```
-
-构建产物会出现在：
-
-```text
-dist/
-```
-
-### 自动发布到 PyPI
-
-当前工作流使用的是 PyPI Trusted Publishing 方式，不需要把 PyPI API Token 直接存进 GitHub Secrets。
-
-你需要先在 PyPI 项目后台配置 Trusted Publisher，大致信息如下：
-
-- Owner: `xx025`
-- Repository name: `ultralytics-disk-cache-hook`
-- Workflow name: `publish.yml`
-- Environment name: `pypi`
-
-配置完成后，发布流程通常是：
-
-1. 更新 `ultralytics_disk_cache_hook/__init__.py` 中的 `__version__`
-2. 提交并推送代码
-3. 在 GitHub 上创建一个 Release
-4. `publish.yml` 自动构建并发布到 PyPI
-
-如果你只想先验证构建是否正常，可以手动运行 `build.yml`。
-
 ## 参考链接
 
 - Ultralytics releases: https://github.com/ultralytics/ultralytics/releases
 - Ultralytics tags: https://github.com/ultralytics/ultralytics/tags
 - `v8.4.38` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.38
-- PyPI Trusted Publishing: https://docs.pypi.org/trusted-publishers/
+
+## 版权声明
+
+Copyright (c) xx025. All rights reserved.
