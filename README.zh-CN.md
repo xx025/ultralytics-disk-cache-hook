@@ -6,7 +6,7 @@
 
 `ultralytics` 在 `cache="disk"` 时，默认会把图片缓存成 `*.npy` 并直接写回图片所在目录。
 
-这在 NFS 训练场景下通常不够友好：
+这在共享存储或网络存储训练场景下通常不够友好：
 
 - 会往共享数据目录回写大量小文件
 - 容易放大元数据压力
@@ -49,7 +49,7 @@ export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 缓存路径示例：
 
 ```text
-/mnt/nfs/datasets/coco/images/train2017/000000000001.jpg
+/mnt/shared-storage/datasets/coco/images/train2017/000000000001.jpg
 -> <cache-root>/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
 ```
 

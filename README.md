@@ -41,7 +41,7 @@ export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 Example cache path:
 
 ```text
-/mnt/nfs/datasets/coco/images/train2017/000000000001.jpg
+/mnt/shared-storage/datasets/coco/images/train2017/000000000001.jpg
 -> <cache-root>/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
 ```
 
