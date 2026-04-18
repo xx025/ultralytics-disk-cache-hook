@@ -18,25 +18,36 @@
 
 ## 快速开始
 
-```python
-from ultralytics_disk_cache_hook import enable
-from ultralytics import YOLO
+```bash
+pip install ultralytics-disk-cache-hook
+```
 
-enable()
+```python
+from ultralytics import YOLO
 
 model = YOLO("yolov8n.pt")
 model.train(data="coco128.yaml", cache="disk")
 ```
 
-安装后，包还会通过放在 `site-packages` 里的
+安装后，包会通过放在 `site-packages` 里的
 `ultralytics_disk_cache_hook_auto_enable_startup.pth` 文件，为新的 Python 进程自动执行一次 `enable()`。
 
-`enable()` 现在默认会同时开启两类 hook，也可以分别控制：
+## 配置
+
+你可以通过环境变量控制启动时的默认行为：
+
+```bash
+export ULTRALYTICS_IMAGE_DISK_CACHE=1
+export ULTRALYTICS_DATASET_META_CACHE=0
+```
+
+其中 `0`、`false`、`no`、`off` 都会被识别为关闭。
+
+如果你关闭了启动时默认行为，或者想在代码里显式控制，也可以这样调用：
 
 ```python
 from ultralytics_disk_cache_hook import enable
 
-enable(image_disk_cache=True, dataset_meta_cache=True)
 enable(image_disk_cache=True, dataset_meta_cache=False)
 enable(image_disk_cache=False, dataset_meta_cache=True)
 ```
@@ -45,7 +56,7 @@ enable(image_disk_cache=False, dataset_meta_cache=True)
 
 - 默认影响 `cache="disk"` 产生的图片 `*.npy`
 - 默认影响数据集元信息 `*.cache`
-- 可通过 `enable(image_disk_cache=..., dataset_meta_cache=...)` 分别关闭任意一类 hook
+- 可通过环境变量或 `enable(...)` 分别关闭任意一类 hook
 - 不影响 `cache="ram"` 或不缓存
 - 检测、分割、姿态等基于 `BaseDataset` 的任务会重写 `self.npy_files`
 - 分类任务会重写 `ClassificationDataset.samples` 中的 `*.npy` 路径

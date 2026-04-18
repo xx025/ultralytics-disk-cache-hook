@@ -6,25 +6,36 @@ Redirect `ultralytics` cache files away from the dataset directory and into a lo
 
 ## Quick Start
 
-```python
-from ultralytics_disk_cache_hook import enable
-from ultralytics import YOLO
+```bash
+pip install ultralytics-disk-cache-hook
+```
 
-enable()
+```python
+from ultralytics import YOLO
 
 model = YOLO("yolov8n.pt")
 model.train(data="coco128.yaml", cache="disk")
 ```
 
-After installation, the package also auto-enables itself for new Python processes via the
+After installation, the package auto-enables itself for new Python processes via the
 `ultralytics_disk_cache_hook_auto_enable_startup.pth` file in `site-packages`.
 
-`enable()` now turns on both cache hooks by default. You can still control them independently:
+## Configuration
+
+You can control the startup defaults with environment variables:
+
+```bash
+export ULTRALYTICS_IMAGE_DISK_CACHE=1
+export ULTRALYTICS_DATASET_META_CACHE=0
+```
+
+Supported false values are `0`, `false`, `no`, and `off`.
+
+If you disable or bypass the startup defaults and want to control the hooks explicitly in code:
 
 ```python
 from ultralytics_disk_cache_hook import enable
 
-enable(image_disk_cache=True, dataset_meta_cache=True)
 enable(image_disk_cache=True, dataset_meta_cache=False)
 enable(image_disk_cache=False, dataset_meta_cache=True)
 ```
@@ -39,7 +50,7 @@ This plugin monkey patches the internal dataset implementation and redirects tho
 
 - By default affects `cache="disk"` image caches
 - By default affects dataset metadata `*.cache` files
-- Lets you disable either hook independently via `enable(image_disk_cache=..., dataset_meta_cache=...)`
+- Lets you disable either hook independently via environment variables or `enable(...)`
 - Does not affect `cache="ram"` or disabled cache
 - Rewrites `self.npy_files` for detection, segmentation, pose, and other tasks built on `BaseDataset`
 - Rewrites `*.npy` paths inside `ClassificationDataset.samples` for classification tasks
