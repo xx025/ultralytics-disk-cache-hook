@@ -4,7 +4,7 @@
 
 [English README](./README.md)
 
-`ultralytics` 在 `cache="disk"` 时，默认会把图片缓存成 `*.npy` 并直接写回图片所在目录。
+`ultralytics` 默认会把训练期产生的缓存文件直接写回数据集所在目录。
 
 这在共享存储或网络存储训练场景下通常不够友好：
 
@@ -28,12 +28,28 @@ model = YOLO("yolov8n.pt")
 model.train(data="coco128.yaml", cache="disk")
 ```
 
+安装后，包还会通过放在 `site-packages` 里的
+`ultralytics_disk_cache_hook_auto_enable_startup.pth` 文件，为新的 Python 进程自动执行一次 `enable()`。
+
+`enable()` 现在默认会同时开启两类 hook，也可以分别控制：
+
+```python
+from ultralytics_disk_cache_hook import enable
+
+enable(image_disk_cache=True, dataset_meta_cache=True)
+enable(image_disk_cache=True, dataset_meta_cache=False)
+enable(image_disk_cache=False, dataset_meta_cache=True)
+```
+
 ## 行为说明
 
-- 只影响 `cache="disk"`
+- 默认影响 `cache="disk"` 产生的图片 `*.npy`
+- 默认影响数据集元信息 `*.cache`
+- 可通过 `enable(image_disk_cache=..., dataset_meta_cache=...)` 分别关闭任意一类 hook
 - 不影响 `cache="ram"` 或不缓存
 - 检测、分割、姿态等基于 `BaseDataset` 的任务会重写 `self.npy_files`
 - 分类任务会重写 `ClassificationDataset.samples` 中的 `*.npy` 路径
+- 检测 / grounding / 分类共享的 `load_dataset_cache_file()`、`save_dataset_cache_file()` 也可被重定向
 - 缓存路径不会按原始目录展开，而是写入哈希桶目录
 
 ## 缓存根目录
@@ -51,6 +67,13 @@ export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 ```text
 /mnt/shared-storage/datasets/coco/images/train2017/000000000001.jpg
 -> <cache-root>/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
+```
+
+数据集元信息缓存路径示例：
+
+```text
+/mnt/shared-storage/datasets/coco/labels/train.cache
+-> <cache-root>/7a/9c/7a9c5f8af885b2f5c6c2f67066342c0a.cache
 ```
 
 ## 版本支持

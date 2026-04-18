@@ -4,7 +4,11 @@ from typing import Any
 
 from packaging.version import InvalidVersion, Version
 
-from .io import get_cache_path_for_image, get_plugin_cache_root
+from .io import (
+    get_cache_path_for_dataset_cache,
+    get_cache_path_for_image,
+    get_plugin_cache_root,
+)
 
 MIN_ULTRALYTICS_VERSION = Version("8.4.0")
 MAX_ULTRALYTICS_VERSION = Version("8.4.38")
@@ -66,20 +70,45 @@ def is_enabled() -> bool:
     return bool(getattr(BaseDataset, "_ultralytics_disk_cache_hook_enabled", False))
 
 
-def enable() -> None:
-    import ultralytics
-    import ultralytics.data.base as base_module
-    import ultralytics.data.dataset as dataset_module
+def _patch_dataset_meta_cache(utils_module: Any, dataset_module: Any) -> None:
+    if getattr(utils_module, "_ultralytics_disk_cache_hook_dataset_meta_enabled", False):
+        return
 
-    _validate_ultralytics_version(ultralytics.__version__)
+    original_utils_load_dataset_cache_file = utils_module.load_dataset_cache_file
+    original_utils_save_dataset_cache_file = utils_module.save_dataset_cache_file
 
-    base_dataset_cls = base_module.BaseDataset
-    classification_dataset_cls = dataset_module.ClassificationDataset
+    def patched_load_dataset_cache_file(path):
+        redirected = get_cache_path_for_dataset_cache(path)
+        print(f"[ultralytics-disk-cache-hook] dataset cache load: {path} -> {redirected}")
+        return original_utils_load_dataset_cache_file(redirected)
+
+    def patched_save_dataset_cache_file(prefix, path, x, version):
+        redirected = get_cache_path_for_dataset_cache(path)
+        print(f"[ultralytics-disk-cache-hook] dataset cache save: {path} -> {redirected}")
+        redirected.parent.mkdir(parents=True, exist_ok=True)
+        return original_utils_save_dataset_cache_file(prefix, redirected, x, version)
+
+    utils_module.load_dataset_cache_file = patched_load_dataset_cache_file
+    utils_module.save_dataset_cache_file = patched_save_dataset_cache_file
+    dataset_module.load_dataset_cache_file = patched_load_dataset_cache_file
+    dataset_module.save_dataset_cache_file = patched_save_dataset_cache_file
+
+    utils_module._ultralytics_disk_cache_hook_dataset_meta_enabled = True
+    utils_module._ultralytics_disk_cache_hook_original_load_dataset_cache_file = (
+        original_utils_load_dataset_cache_file
+    )
+    utils_module._ultralytics_disk_cache_hook_original_save_dataset_cache_file = (
+        original_utils_save_dataset_cache_file
+    )
+
+
+def _patch_image_disk_cache(
+    base_module: Any,
+    dataset_module: Any,
+    base_dataset_cls: Any,
+    classification_dataset_cls: Any,
+) -> None:
     if getattr(base_dataset_cls, "_ultralytics_disk_cache_hook_enabled", False):
-        print(
-            "[ultralytics-disk-cache-hook] already enabled, "
-            f"cache root: {get_plugin_cache_root()}"
-        )
         return
 
     original_base_init = base_dataset_cls.__init__
@@ -144,13 +173,68 @@ def enable() -> None:
     base_dataset_cls._ultralytics_disk_cache_hook_original_init = original_base_init
     base_dataset_cls._ultralytics_disk_cache_hook_original_load_image = original_base_load_image
     base_dataset_cls._ultralytics_disk_cache_hook_original_cache_images = original_base_cache_images
-    base_dataset_cls._ultralytics_disk_cache_hook_original_cache_images_to_disk = original_base_cache_images_to_disk
-    base_dataset_cls._ultralytics_disk_cache_hook_original_check_cache_disk = original_base_check_cache_disk
+    base_dataset_cls._ultralytics_disk_cache_hook_original_cache_images_to_disk = (
+        original_base_cache_images_to_disk
+    )
+    base_dataset_cls._ultralytics_disk_cache_hook_original_check_cache_disk = (
+        original_base_check_cache_disk
+    )
     classification_dataset_cls._ultralytics_disk_cache_hook_original_init = original_classification_init
-    classification_dataset_cls._ultralytics_disk_cache_hook_original_getitem = original_classification_getitem
+    classification_dataset_cls._ultralytics_disk_cache_hook_original_getitem = (
+        original_classification_getitem
+    )
+
+
+def enable(*, image_disk_cache: bool = True, dataset_meta_cache: bool = True) -> None:
+    import ultralytics
+    import ultralytics.data.base as base_module
+    import ultralytics.data.dataset as dataset_module
+    import ultralytics.data.utils as utils_module
+
+    _validate_ultralytics_version(ultralytics.__version__)
+
+    base_dataset_cls = base_module.BaseDataset
+    classification_dataset_cls = dataset_module.ClassificationDataset
+    image_cache_enabled = getattr(base_dataset_cls, "_ultralytics_disk_cache_hook_enabled", False)
+    dataset_cache_enabled = getattr(
+        utils_module,
+        "_ultralytics_disk_cache_hook_dataset_meta_enabled",
+        False,
+    )
+
+    if not image_disk_cache and not dataset_meta_cache:
+        print(
+            "[ultralytics-disk-cache-hook] enable() called with both cache hooks disabled, "
+            "nothing to do."
+        )
+        return
+
+    need_image_patch = image_disk_cache and not image_cache_enabled
+    need_dataset_patch = dataset_meta_cache and not dataset_cache_enabled
+
+    if not need_image_patch and not need_dataset_patch:
+        print(
+            "[ultralytics-disk-cache-hook] already enabled, "
+            f"cache root: {get_plugin_cache_root()}, "
+            f"dataset_meta_cache={dataset_cache_enabled}"
+        )
+        return
+
+    if need_image_patch:
+        _patch_image_disk_cache(
+            base_module,
+            dataset_module,
+            base_dataset_cls,
+            classification_dataset_cls,
+        )
+
+    if need_dataset_patch:
+        _patch_dataset_meta_cache(utils_module, dataset_module)
 
     print(
         "[ultralytics-disk-cache-hook] enabled, "
         f"ultralytics={ultralytics.__version__}, "
-        f"cache root: {get_plugin_cache_root()}"
+        f"cache root: {get_plugin_cache_root()}, "
+        f"image_disk_cache={image_disk_cache or image_cache_enabled}, "
+        f"dataset_meta_cache={dataset_meta_cache or dataset_cache_enabled}"
     )

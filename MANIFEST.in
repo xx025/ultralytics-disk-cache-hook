@@ -1,0 +1,2 @@
+include ultralytics_disk_cache_hook_auto_enable_startup.pth
+include ultralytics_disk_cache_hook_startup_auto_enable.py

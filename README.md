@@ -1,6 +1,6 @@
 # ultralytics-disk-cache-hook
 
-Redirect `ultralytics` `cache="disk"` image caches away from the dataset directory and into a local cache root on the training node.
+Redirect `ultralytics` cache files away from the dataset directory and into a local cache root on the training node.
 
 [中文说明](./README.zh-CN.md)
 
@@ -16,16 +16,34 @@ model = YOLO("yolov8n.pt")
 model.train(data="coco128.yaml", cache="disk")
 ```
 
+After installation, the package also auto-enables itself for new Python processes via the
+`ultralytics_disk_cache_hook_auto_enable_startup.pth` file in `site-packages`.
+
+`enable()` now turns on both cache hooks by default. You can still control them independently:
+
+```python
+from ultralytics_disk_cache_hook import enable
+
+enable(image_disk_cache=True, dataset_meta_cache=True)
+enable(image_disk_cache=True, dataset_meta_cache=False)
+enable(image_disk_cache=False, dataset_meta_cache=True)
+```
+
 ## What It Does
 
 When `ultralytics` runs with `cache="disk"`, it writes `*.npy` cache files next to the original images by default.
 
+It also writes dataset metadata `*.cache` files such as `labels/train.cache`, `annotations.cache`, or `dataset_root.cache` next to the dataset source paths.
+
 This plugin monkey patches the internal dataset implementation and redirects those cache files into a local temporary cache root instead.
 
-- Only affects `cache="disk"`
+- By default affects `cache="disk"` image caches
+- By default affects dataset metadata `*.cache` files
+- Lets you disable either hook independently via `enable(image_disk_cache=..., dataset_meta_cache=...)`
 - Does not affect `cache="ram"` or disabled cache
 - Rewrites `self.npy_files` for detection, segmentation, pose, and other tasks built on `BaseDataset`
 - Rewrites `*.npy` paths inside `ClassificationDataset.samples` for classification tasks
+- Can redirect dataset metadata cache helpers shared by detection, grounding, and classification datasets
 - Writes cache files into hash buckets instead of mirroring the original dataset directory tree
 
 ## Cache Root
@@ -43,6 +61,13 @@ Example cache path:
 ```text
 /mnt/shared-storage/datasets/coco/images/train2017/000000000001.jpg
 -> <cache-root>/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
+```
+
+Dataset metadata cache example:
+
+```text
+/mnt/shared-storage/datasets/coco/labels/train.cache
+-> <cache-root>/7a/9c/7a9c5f8af885b2f5c6c2f67066342c0a.cache
 ```
 
 ## Version Support

@@ -1,8 +1,9 @@
-__version__ = "0.1.2"
+__version__ = "0.2.0"
 
 from .io import (
     PLUGIN_CACHE_DIRNAME,
     PLUGIN_TMP_ENV,
+    get_cache_path_for_dataset_cache,
     get_cache_path_for_image,
     get_plugin_cache_root,
     get_plugin_tmp_root,
@@ -23,6 +24,7 @@ __all__ = [
     "PLUGIN_TMP_ENV",
     "UnsupportedUltralyticsVersionError",
     "enable",
+    "get_cache_path_for_dataset_cache",
     "get_cache_path_for_image",
     "get_plugin_cache_root",
     "get_plugin_tmp_root",
