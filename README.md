@@ -10,6 +10,16 @@ Redirect `ultralytics` cache files away from the dataset directory and into a lo
 pip install ultralytics-disk-cache-hook
 ```
 
+Install by your existing `ultralytics` version:
+
+| Installed `ultralytics` | Recommended `ultralytics-disk-cache-hook` | Install command |
+| --- | --- | --- |
+| `8.4.39 <= ultralytics <= 8.4.84` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
+| `8.4.0 <= ultralytics <= 8.4.38` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
+| Reproduce an older environment pinned to `<= 8.4.38` | `0.2.0` | `pip install "ultralytics-disk-cache-hook==0.2.0"` |
+| `ultralytics < 8.4.0` | Not supported | Do not install this plugin version |
+| `ultralytics > 8.4.84` | Not yet validated | Wait for a newer hook release or verify source compatibility first |
+
 ```python
 from ultralytics import YOLO
 
@@ -22,14 +32,17 @@ After installation, the package auto-enables itself for new Python processes via
 
 ## Configuration
 
-You can control the startup defaults with environment variables:
+You can control the startup defaults and cache root with environment variables:
 
 ```bash
 export ULTRALYTICS_IMAGE_DISK_CACHE=1
 export ULTRALYTICS_DATASET_META_CACHE=0
+export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 ```
 
 Supported false values are `0`, `false`, `no`, and `off`.
+
+The cache root defaults to `tempfile.gettempdir() / "ultralytics-disk-cache"` when `ULTRALYTICS_DISK_CACHE_TMPDIR` is not set.
 
 If you disable or bypass the startup defaults and want to control the hooks explicitly in code:
 
@@ -57,16 +70,6 @@ This plugin monkey patches the internal dataset implementation and redirects tho
 - Can redirect dataset metadata cache helpers shared by detection, grounding, and classification datasets
 - Writes cache files into hash buckets instead of mirroring the original dataset directory tree
 
-## Cache Root
-
-The cache root is derived from `ULTRALYTICS_DISK_CACHE_TMPDIR` when set, otherwise from `tempfile.gettempdir()`, with `ultralytics-disk-cache` appended to it.
-
-Override it with an environment variable:
-
-```bash
-export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
-```
-
 Example cache path:
 
 ```text
@@ -85,13 +88,11 @@ Dataset metadata cache example:
 
 This plugin monkey patches non-public `ultralytics` internals, so it only claims support for versions whose source layout has been checked.
 
-The current code enforces the following validated range:
+Validated range: `8.4.0 <= ultralytics <= 8.4.84`.
 
-- Minimum supported version: `8.4.0`
-- Maximum validated version: `8.4.38`
-- Allowed range: `8.4.0 <= ultralytics <= 8.4.38`
+Use `ultralytics-disk-cache-hook==0.2.1` for the whole validated range. Use `0.2.0` only to reproduce an older environment pinned to `<= 8.4.38`.
 
-If the installed version is outside that range, `enable()` raises `UnsupportedUltralyticsVersionError`.
+Outside that range, `enable()` raises `UnsupportedUltralyticsVersionError`.
 
 Why:
 
@@ -99,7 +100,7 @@ Why:
 - `v8.1.x` through `v8.3.x` do not match the internal hook points used by this patch
 - Starting from `v8.4.0`, the `disk cache` structure in `BaseDataset` and `ClassificationDataset` matches this plugin
 
-This range is based on checked GitHub source files and release/tag history. As of `2026-04-17`, the latest verified release I checked is `v8.4.38`.
+As of `2026-07-02`, I checked the hook points against `v8.4.84`, and those patched code paths still match `main`.
 
 Check the installed version with:
 
@@ -119,7 +120,7 @@ If the local cache disk fills up, the error will occur when `*.npy` files are ac
 
 - Ultralytics releases: https://github.com/ultralytics/ultralytics/releases
 - Ultralytics tags: https://github.com/ultralytics/ultralytics/tags
-- `v8.4.38` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.38
+- `v8.4.84` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.84
 
 ## Copyright
 

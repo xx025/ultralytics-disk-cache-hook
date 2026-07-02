@@ -22,6 +22,16 @@
 pip install ultralytics-disk-cache-hook
 ```
 
+按当前环境里的 `ultralytics` 版本安装：
+
+| 已安装的 `ultralytics` | 推荐的 `ultralytics-disk-cache-hook` | 安装命令 |
+| --- | --- | --- |
+| `8.4.39 <= ultralytics <= 8.4.84` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
+| `8.4.0 <= ultralytics <= 8.4.38` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
+| 需要复现固定在 `<= 8.4.38` 的旧环境 | `0.2.0` | `pip install "ultralytics-disk-cache-hook==0.2.0"` |
+| `ultralytics < 8.4.0` | 不支持 | 不要安装当前插件版本 |
+| `ultralytics > 8.4.84` | 还没有完成验证 | 等待新的 hook 版本，或先自行核对源码兼容性 |
+
 ```python
 from ultralytics import YOLO
 
@@ -34,14 +44,17 @@ model.train(data="coco128.yaml", cache="disk")
 
 ## 配置
 
-你可以通过环境变量控制启动时的默认行为：
+你可以通过环境变量同时控制启动时的默认行为和缓存根目录：
 
 ```bash
 export ULTRALYTICS_IMAGE_DISK_CACHE=1
 export ULTRALYTICS_DATASET_META_CACHE=0
+export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 ```
 
 其中 `0`、`false`、`no`、`off` 都会被识别为关闭。
+
+如果没有设置 `ULTRALYTICS_DISK_CACHE_TMPDIR`，缓存根目录默认是 `tempfile.gettempdir() / "ultralytics-disk-cache"`。
 
 如果你关闭了启动时默认行为，或者想在代码里显式控制，也可以这样调用：
 
@@ -63,16 +76,6 @@ enable(image_disk_cache=False, dataset_meta_cache=True)
 - 检测 / grounding / 分类共享的 `load_dataset_cache_file()`、`save_dataset_cache_file()` 也可被重定向
 - 缓存路径不会按原始目录展开，而是写入哈希桶目录
 
-## 缓存根目录
-
-缓存根目录优先取 `ULTRALYTICS_DISK_CACHE_TMPDIR`，否则使用 `tempfile.gettempdir()`，然后在其下追加 `ultralytics-disk-cache`。
-
-可通过环境变量覆盖：
-
-```bash
-export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
-```
-
 缓存路径示例：
 
 ```text
@@ -91,13 +94,11 @@ export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 
 插件内部直接 monkey patch 了 `ultralytics` 的非公开实现，因此只能声明对“已核对源码结构”的版本负责。
 
-当前代码里已经做了强制限制：
+当前验证范围：`8.4.0 <= ultralytics <= 8.4.84`。
 
-- 最低支持版本：`8.4.0`
-- 最高已验证版本：`8.4.38`
-- 当前允许范围：`8.4.0 <= ultralytics <= 8.4.38`
+这个范围内统一推荐 `ultralytics-disk-cache-hook==0.2.1`。只有在你要复现固定在 `<= 8.4.38` 的旧环境时，才使用 `0.2.0`。
 
-超出范围时，`enable()` 会直接抛出 `UnsupportedUltralyticsVersionError`。
+超出范围时，`enable()` 会抛出 `UnsupportedUltralyticsVersionError`。
 
 原因：
 
@@ -105,7 +106,7 @@ export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 - `v8.1.x` 到 `v8.3.x` 的内部实现与当前 patch 依赖的切点不一致
 - `v8.4.0` 起，`BaseDataset` / `ClassificationDataset` 的 `disk cache` 结构与当前插件对齐
 
-这份范围是基于 GitHub 上已检查的源码和 release/tag 结果确定的；截至 `2026-04-17`，我核对到的最新 release 是 `v8.4.38`。
+截至 `2026-07-02`，这些缓存 hook 切点已经核对到 `v8.4.84`，并且对应代码路径在 `main` 分支上仍保持一致。
 
 查看当前环境中的 `ultralytics` 版本：
 
@@ -125,7 +126,7 @@ python -c "import ultralytics; print(ultralytics.__version__)"
 
 - Ultralytics releases: https://github.com/ultralytics/ultralytics/releases
 - Ultralytics tags: https://github.com/ultralytics/ultralytics/tags
-- `v8.4.38` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.38
+- `v8.4.84` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.84
 
 ## 版权声明
 
