@@ -1,133 +1,66 @@
-
-
 # ultralytics-disk-cache-hook
 
 [English README](./README.md)
 
-`ultralytics` 默认会把训练期产生的缓存文件直接写回数据集所在目录。
+把 Ultralytics 的磁盘缓存从数据集目录重定向到训练节点的本地缓存目录。
 
-这在共享存储或网络存储训练场景下通常不够友好：
+当训练使用 cache="disk" 时，插件会把图片 .npy 缓存和数据集 .cache 元数据缓存写到本地目录，避免向共享存储或网络存储中的数据集目录写入大量缓存文件。
 
-- 会往共享数据目录回写大量小文件
-- 容易放大元数据压力
-- 训练节点的本地磁盘无法被优先利用
+## 安装
 
-这个插件通过 monkey patch `ultralytics` 的内部数据集实现，把 `disk cache` 重定向到训练节点上的本地缓存目录。
+    pip install ultralytics-disk-cache-hook
 
+安装后，新的 Python 进程会自动启用 Hook。当前支持 Ultralytics 8.4.0 到 8.4.84。
 
+## 使用
 
-## 快速开始
+按正常方式训练；需要磁盘缓存时传入 cache="disk"：
 
-```bash
-pip install ultralytics-disk-cache-hook
-```
+    from ultralytics import YOLO
 
-按当前环境里的 `ultralytics` 版本安装：
+    YOLO("yolov8n.pt").train(data="coco128.yaml", cache="disk")
 
-| 已安装的 `ultralytics` | 推荐的 `ultralytics-disk-cache-hook` | 安装命令 |
-| --- | --- | --- |
-| `8.4.39 <= ultralytics <= 8.4.84` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
-| `8.4.0 <= ultralytics <= 8.4.38` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
-| 需要复现固定在 `<= 8.4.38` 的旧环境 | `0.2.0` | `pip install "ultralytics-disk-cache-hook==0.2.0"` |
-| `ultralytics < 8.4.0` | 不支持 | 不要安装当前插件版本 |
-| `ultralytics > 8.4.84` | 还没有完成验证 | 等待新的 hook 版本，或先自行核对源码兼容性 |
-
-```python
-from ultralytics import YOLO
-
-model = YOLO("yolov8n.pt")
-model.train(data="coco128.yaml", cache="disk")
-```
-
-安装后，包会通过放在 `site-packages` 里的
-`ultralytics_disk_cache_hook_auto_enable_startup.pth` 文件，为新的 Python 进程自动执行一次 `enable()`。
+数据集原始目录不会被写入缓存文件，缓存会写到插件缓存根目录。
 
 ## 配置
 
-你可以通过环境变量同时控制启动时的默认行为和缓存根目录：
+| 设置 | 默认值 | 用途 |
+| --- | --- | --- |
+| ULTRALYTICS_DISK_CACHE_TMPDIR | 系统临时目录 | 插件缓存的父目录 |
+| ULTRALYTICS_IMAGE_DISK_CACHE | 1 | 启用图片 .npy 缓存重定向 |
+| ULTRALYTICS_DATASET_META_CACHE | 1 | 启用数据集 .cache 重定向 |
+| ULTRALYTICS_FORCE_DISK_CACHE | 0 | 强制 BaseDataset 使用磁盘缓存 |
 
-```bash
-export ULTRALYTICS_IMAGE_DISK_CACHE=1
-export ULTRALYTICS_DATASET_META_CACHE=0
-export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
-```
+例如，把缓存放到本地 NVMe：
 
-其中 `0`、`false`、`no`、`off` 都会被识别为关闭。
+    export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 
-如果没有设置 `ULTRALYTICS_DISK_CACHE_TMPDIR`，缓存根目录默认是 `tempfile.gettempdir() / "ultralytics-disk-cache"`。
+强制参数默认关闭，以保留 Ultralytics 原本的缓存行为。在受控训练环境中，可在启动 Python 前启用：
 
-如果你关闭了启动时默认行为，或者想在代码里显式控制，也可以这样调用：
+    export ULTRALYTICS_FORCE_DISK_CACHE=1
 
-```python
-from ultralytics_disk_cache_hook import enable
+启用后，BaseDataset 的 false、true 和 "ram" 等缓存值会被改为 "disk"。分类数据集不在此强制范围内。
 
-enable(image_disk_cache=True, dataset_meta_cache=False)
-enable(image_disk_cache=False, dataset_meta_cache=True)
-```
+## Slurm 作业本地临时存储
 
-## 行为说明
+该插件可配合 Slurm 按作业生命周期管理的本地临时存储使用，例如 job_container/tmpfs，或集群通过 Prolog/Epilog 配置的等效机制。这类机制会为作业创建私有本地临时空间，并在作业结束后清理其中内容。
 
-- 默认影响 `cache="disk"` 产生的图片 `*.npy`
-- 默认影响数据集元信息 `*.cache`
-- 可通过环境变量或 `enable(...)` 分别关闭任意一类 hook
-- 不影响 `cache="ram"` 或不缓存
-- 检测、分割、姿态等基于 `BaseDataset` 的任务会重写 `self.npy_files`
-- 分类任务会重写 `ClassificationDataset.samples` 中的 `*.npy` 路径
-- 检测 / grounding / 分类共享的 `load_dataset_cache_file()`、`save_dataset_cache_file()` 也可被重定向
-- 缓存路径不会按原始目录展开，而是写入哈希桶目录
+如果作业本地目录挂载为 /tmp，无需额外设置，因为它正是默认缓存父目录。如果集群提供了其他作业本地路径，可将插件指向该路径：
 
-缓存路径示例：
+    export ULTRALYTICS_DISK_CACHE_TMPDIR=/path/to/job-local-scratch
 
-```text
-/mnt/shared-storage/datasets/coco/images/train2017/000000000001.jpg
--> <cache-root>/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
-```
+这样每个作业都会把缓存保存在本地临时存储中，避免写入共享数据集文件系统，并随作业临时空间一起回收。
 
-数据集元信息缓存路径示例：
+## 缓存路径
 
-```text
-/mnt/shared-storage/datasets/coco/labels/train.cache
--> <cache-root>/7a/9c/7a9c5f8af885b2f5c6c2f67066342c0a.cache
-```
+默认缓存根目录：
 
-## 版本支持
+    <系统临时目录>/ultralytics-disk-cache
 
-插件内部直接 monkey patch 了 `ultralytics` 的非公开实现，因此只能声明对“已核对源码结构”的版本负责。
+插件会根据源路径计算哈希，并使用两级哈希目录存放文件。图片缓存后缀为 .npy，数据集元数据后缀为 .cache。
 
-当前验证范围：`8.4.0 <= ultralytics <= 8.4.84`。
+## 说明
 
-这个范围内统一推荐 `ultralytics-disk-cache-hook==0.2.1`。只有在你要复现固定在 `<= 8.4.38` 的旧环境时，才使用 `0.2.0`。
-
-超出范围时，`enable()` 会抛出 `UnsupportedUltralyticsVersionError`。
-
-原因：
-
-- `v8.0.x` 仍使用旧目录结构 `ultralytics/yolo/data/...`
-- `v8.1.x` 到 `v8.3.x` 的内部实现与当前 patch 依赖的切点不一致
-- `v8.4.0` 起，`BaseDataset` / `ClassificationDataset` 的 `disk cache` 结构与当前插件对齐
-
-截至 `2026-07-02`，这些缓存 hook 切点已经核对到 `v8.4.84`，并且对应代码路径在 `main` 分支上仍保持一致。
-
-查看当前环境中的 `ultralytics` 版本：
-
-```bash
-python -c "import ultralytics; print(ultralytics.__version__)"
-```
-
-## 磁盘空间说明
-
-这个插件当前不会替你检查缓存盘空间是否足够。
-
-启用 `cache="disk"` 时，插件会打印 warning，提示缓存目录位置，并明确要求使用者自行管理磁盘空间。
-
-如果本地缓存盘被写满，报错会发生在实际写入 `*.npy` 文件时。
-
-## 参考链接
-
-- Ultralytics releases: https://github.com/ultralytics/ultralytics/releases
-- Ultralytics tags: https://github.com/ultralytics/ultralytics/tags
-- `v8.4.84` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.84
-
-## 版权声明
-
-Copyright (c) xx025. All rights reserved.
+- 插件会修改 Ultralytics 内部实现，遇到不受支持的版本会拒绝启用。
+- 因为缓存目录可能不在数据集文件系统中，插件不会检查磁盘空间；请自行确保缓存盘空间充足。
+- Ultralytics 的原生可配置磁盘缓存路径提案：[Add cache_dir support for disk image caching](https://github.com/ultralytics/ultralytics/pull/24271)。如需官方支持，可关注该 PR 进度。

@@ -1,18 +1,17 @@
-from __future__ import annotations
+"""Public entry point that coordinates the cache hook modules."""
 
-from typing import Any
+from __future__ import annotations
 
 from packaging.version import InvalidVersion, Version
 
-from .io import (
-    get_cache_path_for_dataset_cache,
-    get_cache_path_for_image,
-    get_plugin_cache_root,
-)
+from . import cache_disk, force_disk
 
 MIN_ULTRALYTICS_VERSION = Version("8.4.0")
 MAX_ULTRALYTICS_VERSION = Version("8.4.84")
 SUPPORTED_ULTRALYTICS_MAJOR_MINOR = (8, 4)
+REPOSITORY_URL = "https://github.com/xx025/ultralytics-disk-cache-hook"
+UPSTREAM_CACHE_PATH_PR_URL = "https://github.com/ultralytics/ultralytics/pull/24271"
+_upstream_pr_announced = False
 
 
 class UnsupportedUltralyticsVersionError(RuntimeError):
@@ -49,192 +48,41 @@ def _validate_ultralytics_version(version: str) -> None:
         )
 
 
-def _rewrite_base_dataset_npy_files(dataset: Any) -> None:
-    if hasattr(dataset, "im_files"):
-        dataset.npy_files = [get_cache_path_for_image(im_file) for im_file in dataset.im_files]
-
-
-def _rewrite_classification_samples(dataset: Any) -> None:
-    rewritten_samples = []
-    for sample in dataset.samples:
-        file_name, class_index, _cache_path, image = sample
-        rewritten_samples.append([file_name, class_index, get_cache_path_for_image(file_name), image])
-    dataset.samples = rewritten_samples
-
-
-def is_enabled() -> bool:
-    try:
-        from ultralytics.data.base import BaseDataset
-    except ModuleNotFoundError:
-        return False
-    return bool(getattr(BaseDataset, "_ultralytics_disk_cache_hook_enabled", False))
-
-
-def _patch_dataset_meta_cache(utils_module: Any, dataset_module: Any) -> None:
-    if getattr(utils_module, "_ultralytics_disk_cache_hook_dataset_meta_enabled", False):
-        return
-
-    original_utils_load_dataset_cache_file = utils_module.load_dataset_cache_file
-    original_utils_save_dataset_cache_file = utils_module.save_dataset_cache_file
-
-    def patched_load_dataset_cache_file(path):
-        redirected = get_cache_path_for_dataset_cache(path)
-        print(f"[ultralytics-disk-cache-hook] dataset cache load: {path} -> {redirected}")
-        return original_utils_load_dataset_cache_file(redirected)
-
-    def patched_save_dataset_cache_file(prefix, path, x, version):
-        redirected = get_cache_path_for_dataset_cache(path)
-        print(f"[ultralytics-disk-cache-hook] dataset cache save: {path} -> {redirected}")
-        redirected.parent.mkdir(parents=True, exist_ok=True)
-        return original_utils_save_dataset_cache_file(prefix, redirected, x, version)
-
-    utils_module.load_dataset_cache_file = patched_load_dataset_cache_file
-    utils_module.save_dataset_cache_file = patched_save_dataset_cache_file
-    dataset_module.load_dataset_cache_file = patched_load_dataset_cache_file
-    dataset_module.save_dataset_cache_file = patched_save_dataset_cache_file
-
-    utils_module._ultralytics_disk_cache_hook_dataset_meta_enabled = True
-    utils_module._ultralytics_disk_cache_hook_original_load_dataset_cache_file = (
-        original_utils_load_dataset_cache_file
-    )
-    utils_module._ultralytics_disk_cache_hook_original_save_dataset_cache_file = (
-        original_utils_save_dataset_cache_file
-    )
-
-
-def _patch_image_disk_cache(
-    base_module: Any,
-    dataset_module: Any,
-    base_dataset_cls: Any,
-    classification_dataset_cls: Any,
-) -> None:
-    if getattr(base_dataset_cls, "_ultralytics_disk_cache_hook_enabled", False):
-        return
-
-    original_base_init = base_dataset_cls.__init__
-    original_base_load_image = base_dataset_cls.load_image
-    original_base_cache_images = base_dataset_cls.cache_images
-    original_base_cache_images_to_disk = base_dataset_cls.cache_images_to_disk
-    original_base_check_cache_disk = base_dataset_cls.check_cache_disk
-    original_classification_init = classification_dataset_cls.__init__
-    original_classification_getitem = classification_dataset_cls.__getitem__
-
-    def patched_base_init(self, *args: Any, **kwargs: Any) -> None:
-        original_base_init(self, *args, **kwargs)
-        if getattr(self, "cache", None) == "disk":
-            _rewrite_base_dataset_npy_files(self)
-
-    def patched_base_load_image(self, i: int, rect_mode: bool = True):
-        if getattr(self, "cache", None) == "disk":
-            self.npy_files[i] = get_cache_path_for_image(self.im_files[i])
-        return original_base_load_image(self, i, rect_mode=rect_mode)
-
-    def patched_base_cache_images(self) -> None:
-        if getattr(self, "cache", None) == "disk":
-            _rewrite_base_dataset_npy_files(self)
-        return original_base_cache_images(self)
-
-    def patched_base_cache_images_to_disk(self, i: int) -> None:
-        cache_path = get_cache_path_for_image(self.im_files[i])
-        self.npy_files[i] = cache_path
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        return original_base_cache_images_to_disk(self, i)
-
-    def patched_base_check_cache_disk(self, safety_margin: float = 0.5) -> bool:
-        cache_root = get_plugin_cache_root()
-        base_module.LOGGER.warning(
-            f"{self.prefix}Disk cache space checks are skipped by ultralytics-disk-cache-hook. "
-            f"Plugin cache root is {cache_root}. Please manage available disk space yourself."
+def _announce_upstream_pr() -> None:
+    """Print the upstream native cache-path proposal once per Python process."""
+    global _upstream_pr_announced
+    if not _upstream_pr_announced:
+        print(
+            "[ultralytics-disk-cache-hook] "
+            f"Repository: {REPOSITORY_URL}"
         )
-        return True
-
-    def patched_classification_init(self, *args: Any, **kwargs: Any) -> None:
-        original_classification_init(self, *args, **kwargs)
-        if getattr(self, "cache_disk", False):
-            _rewrite_classification_samples(self)
-
-    def patched_classification_getitem(self, i: int):
-        if getattr(self, "cache_disk", False):
-            file_name, class_index, _cache_path, image = self.samples[i]
-            cache_path = get_cache_path_for_image(file_name)
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            self.samples[i] = [file_name, class_index, cache_path, image]
-        return original_classification_getitem(self, i)
-
-    base_dataset_cls.__init__ = patched_base_init
-    base_dataset_cls.load_image = patched_base_load_image
-    base_dataset_cls.cache_images = patched_base_cache_images
-    base_dataset_cls.cache_images_to_disk = patched_base_cache_images_to_disk
-    base_dataset_cls.check_cache_disk = patched_base_check_cache_disk
-    classification_dataset_cls.__init__ = patched_classification_init
-    classification_dataset_cls.__getitem__ = patched_classification_getitem
-
-    base_dataset_cls._ultralytics_disk_cache_hook_enabled = True
-    base_dataset_cls._ultralytics_disk_cache_hook_original_init = original_base_init
-    base_dataset_cls._ultralytics_disk_cache_hook_original_load_image = original_base_load_image
-    base_dataset_cls._ultralytics_disk_cache_hook_original_cache_images = original_base_cache_images
-    base_dataset_cls._ultralytics_disk_cache_hook_original_cache_images_to_disk = (
-        original_base_cache_images_to_disk
-    )
-    base_dataset_cls._ultralytics_disk_cache_hook_original_check_cache_disk = (
-        original_base_check_cache_disk
-    )
-    classification_dataset_cls._ultralytics_disk_cache_hook_original_init = original_classification_init
-    classification_dataset_cls._ultralytics_disk_cache_hook_original_getitem = (
-        original_classification_getitem
-    )
+        print(
+            "[ultralytics-disk-cache-hook] "
+            f"Native cache-path support proposal: {UPSTREAM_CACHE_PATH_PR_URL}"
+        )
+        _upstream_pr_announced = True
 
 
-def enable(*, image_disk_cache: bool = True, dataset_meta_cache: bool = True) -> None:
+def enable(
+    *,
+    force_disk_cache: bool = False,
+    image_disk_cache: bool = True,
+    dataset_meta_cache: bool = True,
+) -> None:
+    """Enable the requested cache hook modules."""
     import ultralytics
-    import ultralytics.data.base as base_module
-    import ultralytics.data.dataset as dataset_module
-    import ultralytics.data.utils as utils_module
+    from ultralytics.data.base import BaseDataset
 
     _validate_ultralytics_version(ultralytics.__version__)
+    _announce_upstream_pr()
 
-    base_dataset_cls = base_module.BaseDataset
-    classification_dataset_cls = dataset_module.ClassificationDataset
-    image_cache_enabled = getattr(base_dataset_cls, "_ultralytics_disk_cache_hook_enabled", False)
-    dataset_cache_enabled = getattr(
-        utils_module,
-        "_ultralytics_disk_cache_hook_dataset_meta_enabled",
-        False,
-    )
+    if force_disk_cache:
+        force_disk.enable(BaseDataset)
 
-    if not image_disk_cache and not dataset_meta_cache:
-        print(
-            "[ultralytics-disk-cache-hook] enable() called with both cache hooks disabled, "
-            "nothing to do."
+    if image_disk_cache or dataset_meta_cache:
+        cache_disk.enable(
+            image_disk_cache=image_disk_cache,
+            dataset_meta_cache=dataset_meta_cache,
         )
-        return
-
-    need_image_patch = image_disk_cache and not image_cache_enabled
-    need_dataset_patch = dataset_meta_cache and not dataset_cache_enabled
-
-    if not need_image_patch and not need_dataset_patch:
-        print(
-            "[ultralytics-disk-cache-hook] already enabled, "
-            f"cache root: {get_plugin_cache_root()}, "
-            f"dataset_meta_cache={dataset_cache_enabled}"
-        )
-        return
-
-    if need_image_patch:
-        _patch_image_disk_cache(
-            base_module,
-            dataset_module,
-            base_dataset_cls,
-            classification_dataset_cls,
-        )
-
-    if need_dataset_patch:
-        _patch_dataset_meta_cache(utils_module, dataset_module)
-
-    print(
-        "[ultralytics-disk-cache-hook] enabled, "
-        f"ultralytics={ultralytics.__version__}, "
-        f"cache root: {get_plugin_cache_root()}, "
-        f"image_disk_cache={image_disk_cache or image_cache_enabled}, "
-        f"dataset_meta_cache={dataset_meta_cache or dataset_cache_enabled}"
-    )
+    elif not force_disk_cache:
+        print("[ultralytics-disk-cache-hook] enable() called with all hooks disabled, nothing to do.")

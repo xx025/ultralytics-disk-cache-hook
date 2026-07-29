@@ -1,127 +1,66 @@
 # ultralytics-disk-cache-hook
 
-Redirect `ultralytics` cache files away from the dataset directory and into a local cache root on the training node.
+Keep Ultralytics disk caches off the dataset filesystem.
+
+When training uses cache="disk", this package redirects image .npy files and dataset .cache files into a local cache directory on the training node. This is useful when datasets live on shared or network storage.
 
 [中文说明](./README.zh-CN.md)
 
-## Quick Start
+## Install
 
-```bash
-pip install ultralytics-disk-cache-hook
-```
+    pip install ultralytics-disk-cache-hook
 
-Install by your existing `ultralytics` version:
+The hook auto-enables itself in new Python processes after installation. It supports Ultralytics 8.4.0 through 8.4.84.
 
-| Installed `ultralytics` | Recommended `ultralytics-disk-cache-hook` | Install command |
-| --- | --- | --- |
-| `8.4.39 <= ultralytics <= 8.4.84` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
-| `8.4.0 <= ultralytics <= 8.4.38` | `0.2.1` | `pip install "ultralytics-disk-cache-hook==0.2.1"` |
-| Reproduce an older environment pinned to `<= 8.4.38` | `0.2.0` | `pip install "ultralytics-disk-cache-hook==0.2.0"` |
-| `ultralytics < 8.4.0` | Not supported | Do not install this plugin version |
-| `ultralytics > 8.4.84` | Not yet validated | Wait for a newer hook release or verify source compatibility first |
+## Use
 
-```python
-from ultralytics import YOLO
+Use Ultralytics normally. Set cache="disk" when you want disk caching:
 
-model = YOLO("yolov8n.pt")
-model.train(data="coco128.yaml", cache="disk")
-```
+    from ultralytics import YOLO
 
-After installation, the package auto-enables itself for new Python processes via the
-`ultralytics_disk_cache_hook_auto_enable_startup.pth` file in `site-packages`.
+    YOLO("yolov8n.pt").train(data="coco128.yaml", cache="disk")
+
+The original dataset directory remains unchanged. Cache files are written under the plugin cache root instead.
 
 ## Configuration
 
-You can control the startup defaults and cache root with environment variables:
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| ULTRALYTICS_DISK_CACHE_TMPDIR | System temporary directory | Parent directory for the plugin cache |
+| ULTRALYTICS_IMAGE_DISK_CACHE | 1 | Enable image .npy cache redirection |
+| ULTRALYTICS_DATASET_META_CACHE | 1 | Enable dataset .cache redirection |
+| ULTRALYTICS_FORCE_DISK_CACHE | 0 | Force BaseDataset cache arguments to disk |
 
-```bash
-export ULTRALYTICS_IMAGE_DISK_CACHE=1
-export ULTRALYTICS_DATASET_META_CACHE=0
-export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
-```
+For example, to use local NVMe storage:
 
-Supported false values are `0`, `false`, `no`, and `off`.
+    export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
 
-The cache root defaults to `tempfile.gettempdir() / "ultralytics-disk-cache"` when `ULTRALYTICS_DISK_CACHE_TMPDIR` is not set.
+Parameter forcing is off by default so normal Ultralytics cache behavior is preserved. In a managed training environment, enable it before Python starts:
 
-If you disable or bypass the startup defaults and want to control the hooks explicitly in code:
+    export ULTRALYTICS_FORCE_DISK_CACHE=1
 
-```python
-from ultralytics_disk_cache_hook import enable
+This changes BaseDataset cache values such as false, true, and "ram" to "disk". It does not cover classification datasets.
 
-enable(image_disk_cache=True, dataset_meta_cache=False)
-enable(image_disk_cache=False, dataset_meta_cache=True)
-```
+## Slurm job-local temporary storage
 
-## What It Does
+This plugin works well with Slurm job-lifecycle-managed local temporary storage, such as job_container/tmpfs or a site-specific Prolog/Epilog setup. Those mechanisms create private local scratch space for a job and remove its contents when the job ends.
 
-When `ultralytics` runs with `cache="disk"`, it writes `*.npy` cache files next to the original images by default.
+If the job-local directory is mounted as /tmp, no extra setting is needed because that is the default cache parent. If your cluster exposes another job-local path, point the plugin at it:
 
-It also writes dataset metadata `*.cache` files such as `labels/train.cache`, `annotations.cache`, or `dataset_root.cache` next to the dataset source paths.
+    export ULTRALYTICS_DISK_CACHE_TMPDIR=/path/to/job-local-scratch
 
-This plugin monkey patches the internal dataset implementation and redirects those cache files into a local temporary cache root instead.
+Each job then keeps cache files off the shared dataset filesystem and they are reclaimed with the job-local temporary storage.
 
-- By default affects `cache="disk"` image caches
-- By default affects dataset metadata `*.cache` files
-- Lets you disable either hook independently via environment variables or `enable(...)`
-- Does not affect `cache="ram"` or disabled cache
-- Rewrites `self.npy_files` for detection, segmentation, pose, and other tasks built on `BaseDataset`
-- Rewrites `*.npy` paths inside `ClassificationDataset.samples` for classification tasks
-- Can redirect dataset metadata cache helpers shared by detection, grounding, and classification datasets
-- Writes cache files into hash buckets instead of mirroring the original dataset directory tree
+## Cache layout
 
-Example cache path:
+The default cache root is:
 
-```text
-/mnt/shared-storage/datasets/coco/images/train2017/000000000001.jpg
--> <cache-root>/d1/3f/d13f474cca61f46ba06ecba11c1b3046.npy
-```
+    <system-temp-dir>/ultralytics-disk-cache
 
-Dataset metadata cache example:
+Each source path is hashed, then stored in two hash-bucket directories. Image caches use .npy and dataset metadata uses .cache.
 
-```text
-/mnt/shared-storage/datasets/coco/labels/train.cache
--> <cache-root>/7a/9c/7a9c5f8af885b2f5c6c2f67066342c0a.cache
-```
+## Notes
 
-## Version Support
-
-This plugin monkey patches non-public `ultralytics` internals, so it only claims support for versions whose source layout has been checked.
-
-Validated range: `8.4.0 <= ultralytics <= 8.4.84`.
-
-Use `ultralytics-disk-cache-hook==0.2.1` for the whole validated range. Use `0.2.0` only to reproduce an older environment pinned to `<= 8.4.38`.
-
-Outside that range, `enable()` raises `UnsupportedUltralyticsVersionError`.
-
-Why:
-
-- `v8.0.x` still uses the old `ultralytics/yolo/data/...` layout
-- `v8.1.x` through `v8.3.x` do not match the internal hook points used by this patch
-- Starting from `v8.4.0`, the `disk cache` structure in `BaseDataset` and `ClassificationDataset` matches this plugin
-
-As of `2026-07-02`, I checked the hook points against `v8.4.84`, and those patched code paths still match `main`.
-
-Check the installed version with:
-
-```bash
-python -c "import ultralytics; print(ultralytics.__version__)"
-```
-
-## Disk Space
-
-This plugin does not currently validate whether the cache disk has enough free space.
-
-When `cache="disk"` is enabled, the plugin prints a warning with the cache root and asks the user to manage disk space manually.
-
-If the local cache disk fills up, the error will occur when `*.npy` files are actually being written.
-
-## References
-
-- Ultralytics releases: https://github.com/ultralytics/ultralytics/releases
-- Ultralytics tags: https://github.com/ultralytics/ultralytics/tags
-- `v8.4.84` release: https://github.com/ultralytics/ultralytics/releases/tag/v8.4.84
-
-## Copyright
-
-Copyright (c) xx025. All rights reserved.
+- The plugin patches Ultralytics internals and rejects unsupported versions.
+- Disk-space checks are skipped because the cache root may be outside the dataset filesystem. Ensure the selected cache disk has enough free space.
+- The upstream proposal for native configurable disk-cache paths is [Add cache_dir support for disk image caching](https://github.com/ultralytics/ultralytics/pull/24271). Follow its progress if you need first-party support.

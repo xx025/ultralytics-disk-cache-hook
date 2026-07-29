@@ -6,9 +6,10 @@ def _env_enabled(name: str, default: str = "1") -> bool:
 
 
 try:
-    import ultralytics_disk_cache_hook as _udch
+    from ultralytics_disk_cache_hook.patch import enable
 
-    _udch.enable(
+    enable(
+        force_disk_cache=_env_enabled("ULTRALYTICS_FORCE_DISK_CACHE", "0"),
         image_disk_cache=_env_enabled("ULTRALYTICS_IMAGE_DISK_CACHE", "1"),
         dataset_meta_cache=_env_enabled("ULTRALYTICS_DATASET_META_CACHE", "1"),
     )
