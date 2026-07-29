@@ -28,12 +28,22 @@
 | --- | --- | --- |
 | ULTRALYTICS_DISK_CACHE_TMPDIR | 系统临时目录 | 插件缓存的父目录 |
 | ULTRALYTICS_IMAGE_DISK_CACHE | 1 | 启用图片 .npy 缓存重定向 |
-| ULTRALYTICS_DATASET_META_CACHE | 1 | 启用数据集 .cache 重定向 |
+| ULTRALYTICS_DATASET_META_CACHE | 1 | 启用数据集 .cache 元数据重定向 |
 | ULTRALYTICS_FORCE_DISK_CACHE | 0 | 强制 BaseDataset 使用磁盘缓存 |
 
-例如，把缓存放到本地 NVMe：
+可直接复制以下配置块后按需调整：
 
+    # 插件缓存的父目录。默认：系统临时目录。
     export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
+
+    # 重定向图片 .npy 缓存。默认：1。
+    export ULTRALYTICS_IMAGE_DISK_CACHE=1
+
+    # 重定向数据集 .cache 元数据。默认：1。
+    export ULTRALYTICS_DATASET_META_CACHE=1
+
+    # 强制 BaseDataset 使用磁盘缓存。默认：0。
+    export ULTRALYTICS_FORCE_DISK_CACHE=0
 
 强制参数默认关闭，以保留 Ultralytics 原本的缓存行为。在受控训练环境中，可在启动 Python 前启用：
 

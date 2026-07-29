@@ -31,9 +31,19 @@ The original dataset directory remains unchanged. Cache files are written under 
 | ULTRALYTICS_DATASET_META_CACHE | 1 | Enable dataset .cache redirection |
 | ULTRALYTICS_FORCE_DISK_CACHE | 0 | Force BaseDataset cache arguments to disk |
 
-For example, to use local NVMe storage:
+Copy and adjust this block as needed:
 
+    # Parent directory for the plugin cache. Default: system temporary directory.
     export ULTRALYTICS_DISK_CACHE_TMPDIR=/local_nvme/tmp
+
+    # Redirect image .npy caches. Default: 1.
+    export ULTRALYTICS_IMAGE_DISK_CACHE=1
+
+    # Redirect dataset .cache metadata. Default: 1.
+    export ULTRALYTICS_DATASET_META_CACHE=1
+
+    # Force BaseDataset cache arguments to disk. Default: 0.
+    export ULTRALYTICS_FORCE_DISK_CACHE=0
 
 Parameter forcing is off by default so normal Ultralytics cache behavior is preserved. In a managed training environment, enable it before Python starts:
 
